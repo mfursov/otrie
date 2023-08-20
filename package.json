@@ -1,0 +1,53 @@
+{
+  "name": "otrie",
+  "description": "Observable Path Trie Store",
+  "version": "0.9.0",
+  "license": "Apache-2.0",
+  "main": "dist/index.js",
+  "private": false,
+  "scripts": {
+    "build": "tsc",
+    "clean": "rimraf ./dist",
+    "lint": "eslint . --ext .ts",
+    "test": "jest --runInBand"
+  },
+  "dependencies": {
+    "assertic": "^0.9.4",
+    "ptrie": "^1.0.0",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^6.4.0",
+    "@typescript-eslint/parser": "^6.4.0",
+    "eslint": "^8.47.0",
+    "rimraf": "^5.0.1",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.1.6"
+  },
+  "engines": {
+    "node": ">=10"
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "keywords": [
+    "observable",
+    "reactive",
+    "rxjs",
+    "trie",
+    "tree",
+    "store",
+    "state",
+    "observable tree",
+    "observable state",
+    "observable store",
+    "reactive tree",
+    "reactive state",
+    "reactive store"
+  ],
+  "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:mfursov/otrie.git"
+  }
+}
