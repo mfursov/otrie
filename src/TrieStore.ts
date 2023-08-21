@@ -25,9 +25,6 @@ export class TrieStore {
     /** Trie of observers. */
     private readonly observersTrie = new Trie<string, ObserversTrieSubject>();
 
-    /** State of the store. An empty record by default. */
-    private rootState: StateRecord = {};
-
     /**
      * Current depth of active batch operations.
      * Changes are delivered only after all operations within a batch are completed.
@@ -41,6 +38,13 @@ export class TrieStore {
     private batchedActions: Array<Action> = [];
 
     private rootStateBeforeBatchStart = this.rootState;
+
+
+    constructor(
+        /** State of the store. An empty record by default. */
+        private rootState: StateRecord = {}
+    ) {
+    }
 
     /**
      * Returns current store state for the root path.
