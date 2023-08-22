@@ -21,7 +21,7 @@ class ObserversTrieSubject<T extends StateValue = StateValue> extends Subject<Ob
  * Keeps an instance of Rxjs Subject associated with every monitored field of State
  * and notifies observers on changes.
  */
-export class TrieStore {
+export class TrieStore<RootStateType extends StateRecord = StateRecord> {
     /** Trie of observers. */
     private readonly observersTrie = new Trie<string, ObserversTrieSubject>();
 
@@ -35,14 +35,14 @@ export class TrieStore {
      * Current batch actions in-flight.
      * The actions will be dispatched when the last top-level batch completes.
      */
-    private batchedActions: Array<Action> = [];
+    private appliedBatchActions: Array<Action> = [];
 
     private rootStateBeforeBatchStart = this.rootState;
 
 
     constructor(
-        /** State of the store. An empty record by default. */
-        private rootState: StateRecord = {}
+        /** Initial state of the store. */
+        private rootState: RootStateType,
     ) {
     }
 
@@ -51,7 +51,7 @@ export class TrieStore {
      * Note: it is unsafe to modify the returned state because the store and observers
      * will not be aware of the modifications and this can lead to undefined behavior.
      */
-    get state(): StateRecord {
+    get state(): RootStateType {
         return this.rootState;
     }
 
@@ -89,7 +89,7 @@ export class TrieStore {
                                            compareFn?: ((oldValue: T | undefined, newValue: T) => boolean)
     ): void {
         if (!compareFn?.(this.get(path), value)) {
-            this._dispatch({type: 'set', path, value: value});
+            this._apply({type: 'set', path, value: value});
         }
     }
 
@@ -102,17 +102,17 @@ export class TrieStore {
      * Otherwise, a notification will be sent after the top-level batch function completes.
      */
     delete(path: string[]): void {
-        this._dispatch({type: 'delete', path});
+        this._apply({type: 'delete', path});
     }
 
     /**
-     * Completes and removes all subscriptions and makes the store state empty.
+     * Completes and removes all subscriptions and resets the store state.
      * No update is sent to any observers as the result of this operation: all subscriptions are completed before the cleanup.
      */
-    reset(): void {
+    reset(newState: RootStateType): void {
         this.observersTrie.visitDfs('pre-order', subject => subject?.complete());
         this.observersTrie.delete([]);
-        this.rootState = {};
+        this.rootState = newState;
     }
 
     /**
@@ -130,31 +130,35 @@ export class TrieStore {
             batchFn();
         } finally {
             this.batchDepth--;
-            if (this.batchDepth === 0 && this.batchedActions.length > 0) {
-                const batchAction: BatchAction = {type: 'batch', actions: this.batchedActions};
-                this.batchedActions = [];
-                this._dispatch(batchAction);
+            if (this.batchDepth === 0 && this.appliedBatchActions.length > 0) {
+                const batchAction: BatchAction = {type: 'batch', actions: this.appliedBatchActions};
+                this.appliedBatchActions = [];
+                this._notify(batchAction);
             }
         }
     }
 
     /**
-     * Dispatches store update action.
      * Applies changes to the store state immediately, but delays observer
      * notification until all active batch operations are completed.
      */
-    private _dispatch(action: Action): void {
+    private _apply(action: Action): void {
         if (this.batchDepth === 0) {
             this.rootStateBeforeBatchStart = this.rootState;
         }
-        this.rootState = apply(this.rootState, action);
+        this.rootState = apply(this.rootState, action) as RootStateType;
+        if (this.rootState === this.rootStateBeforeBatchStart || this.observersTrie.isEmpty) {
+            return; // Nothing is changed.
+        }
         if (this.batchDepth > 0) {
-            this.batchedActions.push(action);
+            this.appliedBatchActions.push(action);
             return;
         }
-        if (this.observersTrie.isEmpty) {
-            return;
-        }
+        this._notify(action);
+    }
+
+    /** Notifies all pending observers selected by the action path. */
+    private _notify(action: Action): void {
         // Notify subscribers about the update.
         const flagTrie = new Trie<string, boolean>();
         const allPaths = extractPaths(action);
