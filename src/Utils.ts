@@ -92,7 +92,7 @@ export function deleteInPath(state: StateRecord, path: ReadonlyArray<string>): S
             return state; // Nothing to delete.
         }
         assertTruthy(typeof subState === 'object' && subState !== null,
-            () => `Cannot delete a property from a non-record parent. Path: '${path.slice(0, i)}', type: ${subState === null ? '<null>' : typeof subState}`);
+            () => `Cannot delete a property from a non-record parent. Path: '${path.slice(0, i + 1)}', type: ${subState === null ? '<null>' : typeof subState}`);
     }
     const leafKey = path[path.length - 1];
     return subState[leafKey] === undefined ? state : deepCloneOnPath(state, path, undefined);

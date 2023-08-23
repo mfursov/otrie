@@ -1,17 +1,19 @@
 import {beforeEach, describe, expect, it} from '@jest/globals';
 import {TrieStore} from '../src/TrieStore';
 import {firstValueFrom} from 'rxjs';
+import {StateRecord} from '../src/Utils';
 
 describe('TrieStore', () => {
 
     let store: TrieStore = new TrieStore({});
 
-    // Observed events for the following topology : { a1:{b1:1}, a2:{b2:2} }.
+    // Observed events for the following topology: { a1:{b1:1}, a2:{b2:2} } (graphRootState).
     let observedRootEvents: Array<unknown> = [];
     let observedNodeA1Events: Array<unknown> = [];
     let observedNodeA2Events: Array<unknown> = [];
     let observedNodeB1Events: Array<unknown> = [];
     let observedNodeB2Events: Array<unknown> = [];
+    let graphRootState: StateRecord = {};
 
     beforeEach(() => {
         observedRootEvents = [];
@@ -19,6 +21,7 @@ describe('TrieStore', () => {
         observedNodeA2Events = [];
         observedNodeB1Events = [];
         observedNodeB2Events = [];
+        graphRootState = {a1: {b1: 1}, a2: {b2: 2}};
         store = new TrieStore({});
         store.observe([]).subscribe(e => observedRootEvents.push(e));
         store.observe(['a1']).subscribe(e => observedNodeA1Events.push(e));
@@ -117,6 +120,19 @@ describe('TrieStore', () => {
             store.set([], newState);
             expect(store.state).toBe(newState);
             expect(newState).toEqual({a: 1});
+        });
+
+        it('root state must be a record', () => {
+            expect(() => store.set([], true)).toThrow('must be a record');
+            expect(() => store.set([], 1)).toThrow('must be a record');
+            expect(() => store.set([], null)).toThrow('must be a record');
+            expect(() => store.set([], () => {})).toThrow('must be a record');
+            expect(() => store.set([], BigInt(10))).toThrow('must be a record');
+            expect(() => store.set([], NaN)).toThrow('must be a record');
+            expect(() => store.set([], Infinity)).toThrow('must be a record');
+            expect(() => store.set([], [])).toThrow('must be a record');
+
+            expect(() => store.set([], undefined)).toThrow('delete an empty path');
         });
 
         it('can set a top-level property', () => {
@@ -226,17 +242,162 @@ describe('TrieStore', () => {
             expect(state2).not.toBe(state1);
         });
 
-        it('root state must be a record', () => {
-            expect(() => store.set([], true)).toThrow('must be a record');
-            expect(() => store.set([], 1)).toThrow('must be a record');
-            expect(() => store.set([], null)).toThrow('must be a record');
-            expect(() => store.set([], () => {})).toThrow('must be a record');
-            expect(() => store.set([], BigInt(10))).toThrow('must be a record');
-            expect(() => store.set([], NaN)).toThrow('must be a record');
-            expect(() => store.set([], Infinity)).toThrow('must be a record');
-            expect(() => store.set([], [])).toThrow('must be a record');
+        it('supports non default compareFn', () => {
+            const state0 = store.state;
 
-            expect(() => store.set([], undefined)).toThrow('delete an empty path');
+            store.set(['a'], 1, () => true);
+            expect(observedRootEvents.length).toBe(1);
+            expect(observedRootEvents).toEqual([{}]);
+
+            store.set(['a'], 1);
+            expect(observedRootEvents.length).toBe(2);
+            expect(observedRootEvents).toEqual([{}, {a: 1}]);
+            const state1 = store.state;
+            expect(state1).not.toBe(state0);
+
+            store.set(['a'], 2, () => true);
+            expect(observedRootEvents.length).toBe(2);
+            expect(observedRootEvents).toEqual([{}, {a: 1}]);
+            expect(state1).toBe(store.state);
+        });
+
+        it('non default compareFn does affect referential equality', () => {
+            store.set(['a'], 1);
+            expect(observedRootEvents.length).toBe(2);
+            expect(observedRootEvents).toEqual([{}, {a: 1}]);
+
+            store.set(['a'], 1, () => false);
+            expect(observedRootEvents.length).toBe(2);
+            expect(observedRootEvents).toEqual([{}, {a: 1}]);
+        });
+
+        it('compareFn gets correct arguments', () => {
+            let cachedOldValue: unknown | undefined;
+            let cachedNewValue: unknown | undefined;
+            let cachedPath: string[] | undefined;
+            const compareFn = (oldValue: unknown, newValue: unknown, path: string[]): boolean => {
+                cachedOldValue = oldValue;
+                cachedNewValue = newValue;
+                cachedPath = path;
+                return false;
+            };
+            const value11 = {a: 1};
+            const path1: string[] = [];
+            store.set(path1, value11, compareFn);
+            expect(cachedOldValue).toEqual({});
+            expect(cachedNewValue).toBe(value11);
+            expect(cachedPath).toBe(path1);
+
+            const value12 = {a: 2};
+            store.set(path1, value12, compareFn);
+            expect(cachedOldValue).toBe(value11);
+            expect(cachedNewValue).toBe(value12);
+            expect(cachedPath).toBe(path1);
+
+            const value21 = 3;
+            const path2: string[] = ['a'];
+            store.set(path2, value21, compareFn);
+            expect(cachedOldValue).toBe(2);
+            expect(cachedNewValue).toBe(value21);
+            expect(cachedPath).toBe(path2);
+
+            const value22 = 4;
+            store.set(path2, value22, compareFn);
+            expect(cachedOldValue).toBe(value21);
+            expect(cachedNewValue).toEqual(value22);
+            expect(cachedPath).toBe(path2);
+        });
+    });
+
+    describe('delete', () => {
+        it('does not allow delete empty path', () => {
+            expect(() => store.delete([])).toThrow('empty path');
+        });
+
+        it('no-op on empty key deletion', () => {
+            store.set(['a'], {});
+            store.delete(['a', 'b']);
+            store.delete(['c']);
+            expect(store.state).toEqual({a: {}});
+        });
+
+        it('does not allow deletion from non-record types', () => {
+            store.set(['a'], 1);
+            expect(() => store.delete(['a', 'b'])).toThrow(`Path: 'a', type: number`);
+
+            store.set(['a'], []);
+            store.delete(['a', 'b']);
+            expect(store.state).toEqual({a: []});
+
+            store.set(['a'], true);
+            expect(() => store.delete(['a', 'b'])).toThrow(`Path: 'a', type: boolean`);
+
+            store.set(['a'], null);
+            expect(() => store.delete(['a', 'b'])).toThrow(`Path: 'a', type: <null>`);
+
+            store.set(['a'], '');
+            expect(() => store.delete(['a', 'b'])).toThrow(`Path: 'a', type: string`);
+
+            store.set(['a'], BigInt(0));
+            expect(() => store.delete(['a', 'b'])).toThrow(`Path: 'a', type: bigint`);
+        });
+
+        it('deletes leaf keys', () => {
+            store.set(['a'], {});
+            store.set(['a', 'b'], 2);
+            store.delete(['a', 'b']);
+            expect(store.state).toEqual({a: {}});
+        });
+
+        it('deletes middle keys', () => {
+            store.set(['a'], {});
+            store.set(['a', 'b'], {});
+            store.set(['a', 'b', 'c'], 3);
+            store.delete(['a', 'b']);
+            expect(store.state).toEqual({a: {}});
+        });
+
+        it('deletes top keys', () => {
+            store.set(['a'], {});
+            store.set(['a', 'b'], {});
+            store.delete(['a']);
+            expect(store.state).toEqual({});
+        });
+
+        it('throws on array item deletion', () => {
+            store.set(['a'], [0]);
+            expect(() => store.delete(['a', '0'])).toThrow('array');
+        });
+
+        it('does not emit on no-op', () => {
+            store.set(['a'], {});
+            store.set(['a', 'b'], {});
+            const eventCountBefore = observedRootEvents.length;
+            store.delete(['a', 'b', 'c']);
+            expect(observedRootEvents.length).toEqual(eventCountBefore);
+        });
+
+        it('emits when deleted', () => {
+            store.set([], graphRootState);
+            const rootEventCountOnStart = observedRootEvents.length;
+            const a1EventCountOnStart = observedNodeA1Events.length;
+            const b1EventCountOnStart = observedNodeB1Events.length;
+            const a2EventCountOnStart = observedNodeA1Events.length;
+
+            store.delete(['a1', 'b1']);
+
+            expect(observedRootEvents.length).toBe(rootEventCountOnStart + 1);
+            expect(observedNodeA1Events.length).toBe(a1EventCountOnStart + 1);
+            expect(observedNodeB1Events.length).toBe(b1EventCountOnStart + 1);
+            expect(observedNodeA2Events.length).toBe(a2EventCountOnStart);
+
+            expect(observedRootEvents.at(-1)).toEqual({a1: {}, a2: {b2: 2}});
+            expect(observedNodeA1Events.at(-1)).toEqual({});
+            expect(observedNodeB1Events.at(-1)).toBe(undefined);
+
+            store.set(['a1', 'b1'], 3);
+            expect(observedNodeB1Events.length).toBe(b1EventCountOnStart + 2);
+            expect(observedNodeB1Events.at(-1)).toBe(3);
         });
     });
 

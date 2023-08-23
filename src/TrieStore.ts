@@ -86,9 +86,9 @@ export class TrieStore<RootStateType extends StateRecord = StateRecord> {
      */
     set<T extends StateValue = StateValue>(path: string[],
                                            value: T,
-                                           compareFn?: ((oldValue: T | undefined, newValue: T) => boolean)
+                                           compareFn?: ((oldValue: T | undefined, newValue: T, path: string[]) => boolean)
     ): void {
-        if (!compareFn?.(this.get(path), value)) {
+        if (!compareFn?.(this.get(path), value, path)) {
             this._apply({type: 'set', path, value: value});
         }
     }

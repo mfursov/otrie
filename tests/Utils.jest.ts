@@ -269,7 +269,7 @@ describe('Utils', () => {
             expect(() => deleteInPath({a: ''}, ['a', 'b'])).toThrow('non-record parent');
         });
 
-        it(`delete a child from a string field in array cases an error`, () => {
+        it(`delete a child from a string field in array causes an error`, () => {
             expect(() => deleteInPath({a: [{}, 'non-object-field']}, ['a', '1', 'b'])).toThrow('non-record parent');
         });
 
