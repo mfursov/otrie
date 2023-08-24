@@ -416,5 +416,22 @@ describe('TrieStore', () => {
             expect(observedRootEvents.length).toBe(2);
             expect(observedRootEvents).toEqual([{}, {a: 2, b: 3}]);
         });
+
+        it('handles different paths', () => {
+            expect(observedRootEvents.length).toBe(1);
+            expect(observedNodeA1Events.length).toBe(1);
+            expect(observedNodeA2Events.length).toBe(1);
+            store.runInBatch(() => {
+                store.set(['a1'], 1);
+                store.set(['a2'], 2);
+            });
+            expect(observedRootEvents.length).toBe(2);
+            expect(observedNodeA1Events.length).toBe(2);
+            expect(observedNodeA2Events.length).toBe(2);
+
+            expect(observedRootEvents).toEqual([{}, {a1: 1, a2: 2}]);
+            expect(observedNodeA1Events).toEqual([undefined, 1]);
+            expect(observedNodeA2Events).toEqual([undefined, 2]);
+        });
     });
 });

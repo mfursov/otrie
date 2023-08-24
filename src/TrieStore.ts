@@ -159,14 +159,14 @@ export class TrieStore<RootStateType extends StateRecord = StateRecord> {
 
     /** Notifies all pending observers selected by the action path. */
     private _notify(action: Action): void {
-        // Notify subscribers about the update.
-        const flagTrie = new Trie<string, boolean>();
+        // Notify subscribers about the update. The 'updateTrie' contains boolean flags for nodes to notify.
+        const updateTrie = new Trie<string, boolean>();
         const allPaths = extractPaths(action);
         allPaths.sort((p1, p2) => p2.length - p1.length); // Sort 'allPaths' so the longest paths come first. It makes fillPath more optimal.
         for (const path of allPaths) {
-            flagTrie.fillPath(path, currentValue => currentValue ? Trie.StopFillToken : true);
+            updateTrie.fillPath(path, () => true);
         }
-        flagTrie.visitDfs('pre-order', (_, path) => {
+        updateTrie.visitDfs('pre-order', (_, path) => {
             const subject = this.observersTrie.get(path);
             if (subject) {
                 const value = this.get(path);

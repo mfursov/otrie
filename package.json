@@ -1,7 +1,7 @@
 {
   "name": "otrie",
   "description": "Observable Path Trie Store",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "license": "Apache-2.0",
   "main": "dist/index.js",
   "private": false,
