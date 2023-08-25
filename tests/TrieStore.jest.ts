@@ -1,7 +1,6 @@
 import {beforeEach, describe, expect, it} from '@jest/globals';
 import {TrieStore} from '../src/TrieStore';
 import {firstValueFrom} from 'rxjs';
-import {StateRecord} from '../src/Utils';
 
 describe('TrieStore', () => {
 
@@ -13,21 +12,75 @@ describe('TrieStore', () => {
     let observedNodeA2Events: Array<unknown> = [];
     let observedNodeB1Events: Array<unknown> = [];
     let observedNodeB2Events: Array<unknown> = [];
-    let graphRootState: StateRecord = {};
+    let observedOldValueRootEvents: Array<unknown> = [];
+    let observedOldValueNodeA1Events: Array<unknown> = [];
+    let observedOldValueNodeA2Events: Array<unknown> = [];
+    let observedOldValueNodeB1Events: Array<unknown> = [];
+    let observedOldValueNodeB2Events: Array<unknown> = [];
+    let orderedNotifications: Array<unknown> = [];
+    let graphRootState: { a1: { b1: number }, a2: { b2: number } } = {a1: {b1: 1}, a2: {b2: 2}};
 
-    beforeEach(() => {
+    function subscribeObservers(): void {
+        store.observe([]).subscribe(e => {
+            observedRootEvents.push(e);
+            orderedNotifications.push(observedRootEvents);
+        });
+        store.observe(['a1']).subscribe(e => {
+            observedNodeA1Events.push(e);
+            orderedNotifications.push(observedNodeA1Events);
+        });
+        store.observe(['a2']).subscribe(e => {
+            observedNodeA2Events.push(e);
+            orderedNotifications.push(observedNodeA2Events);
+        });
+        store.observe(['a1', 'b1']).subscribe(e => {
+            observedNodeB1Events.push(e);
+            orderedNotifications.push(observedNodeB1Events);
+        });
+        store.observe(['a2', 'b2']).subscribe(e => {
+            observedNodeB2Events.push(e);
+            orderedNotifications.push(observedNodeB2Events);
+        });
+        store.observeChanges([]).subscribe(e => {
+            expect(e.value).toBe(observedRootEvents.at(-1));
+            observedOldValueRootEvents.push(e.oldValue);
+        });
+        store.observeChanges(['a1']).subscribe(e => {
+            expect(e.value).toBe(observedNodeA1Events.at(-1));
+            observedOldValueNodeA1Events.push(e.oldValue);
+        });
+        store.observeChanges(['a2']).subscribe(e => {
+            expect(e.value).toBe(observedNodeA2Events.at(-1));
+            observedOldValueNodeA2Events.push(e.oldValue);
+        });
+        store.observeChanges(['a1', 'b1']).subscribe(e => {
+            expect(e.value).toBe(observedNodeB1Events.at(-1));
+            observedOldValueNodeB1Events.push(e.oldValue);
+        });
+        store.observeChanges(['a2', 'b2']).subscribe(e => {
+            expect(e.value).toBe(observedNodeB2Events.at(-1));
+            observedOldValueNodeB2Events.push(e.oldValue);
+        });
+    }
+
+    function clearObservations(): void {
         observedRootEvents = [];
         observedNodeA1Events = [];
         observedNodeA2Events = [];
         observedNodeB1Events = [];
         observedNodeB2Events = [];
+        observedOldValueRootEvents = [];
+        observedOldValueNodeA1Events = [];
+        observedOldValueNodeA2Events = [];
+        observedOldValueNodeB1Events = [];
+        observedOldValueNodeB2Events = [];
+        orderedNotifications = [];
+    }
+
+    beforeEach(() => {
+        clearObservations();
         graphRootState = {a1: {b1: 1}, a2: {b2: 2}};
         store = new TrieStore({});
-        store.observe([]).subscribe(e => observedRootEvents.push(e));
-        store.observe(['a1']).subscribe(e => observedNodeA1Events.push(e));
-        store.observe(['a2']).subscribe(e => observedNodeA2Events.push(e));
-        store.observe(['a1', 'b1']).subscribe(e => observedNodeB1Events.push(e));
-        store.observe(['a2', 'b2']).subscribe(e => observedNodeB2Events.push(e));
     });
 
     describe('constructor', () => {
@@ -111,6 +164,85 @@ describe('TrieStore', () => {
         it('supports empty strings as keys', () => {
             store.set(['1', ''], 3);
             expect(store.get(['1', ''])).toBe(3);
+        });
+    });
+
+    describe('observe', () => {
+        it('emits default on store creation', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            expect(observedRootEvents.length).toBe(1);
+            expect(observedNodeA1Events.length).toBe(1);
+            expect(observedNodeA2Events.length).toBe(1);
+            expect(observedNodeB1Events.length).toBe(1);
+            expect(observedNodeB2Events.length).toBe(1);
+        });
+
+        it('uses correct notification order when initied', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            expect(orderedNotifications).toEqual([
+                observedRootEvents,
+                observedNodeA1Events,
+                observedNodeA2Events,
+                observedNodeB1Events,
+                observedNodeB2Events,
+            ]);
+        });
+
+        it('uses correct notification order when child is updated', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            orderedNotifications = [];
+            store.set(['a1', 'b1'], 3);
+            expect(orderedNotifications).toEqual([
+                observedRootEvents,
+                observedNodeA1Events,
+                observedNodeB1Events,
+            ]);
+        });
+
+        it('does not emits events from inside of the batch', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            clearObservations();
+            store.runInBatch(() => {
+                store.set(['a1', 'b1'], 10);
+                store.set(['a1', 'b1'], 20);
+            });
+            expect(observedRootEvents.length).toBe(1);
+            expect(observedNodeA1Events.length).toBe(1);
+            expect(observedNodeB1Events.length).toBe(1);
+            expect(observedNodeA2Events.length).toBe(0);
+            expect(observedNodeB2Events.length).toBe(0);
+
+            expect(observedRootEvents).toEqual([{a1: {b1: 20}, a2: {b2: 2}}]);
+            expect(observedNodeA1Events).toEqual([{b1: 20}]);
+            expect(observedNodeB1Events).toEqual([20]);
+
+            expect(observedOldValueRootEvents).toEqual([graphRootState]);
+            expect(observedOldValueNodeA1Events).toEqual([graphRootState.a1]);
+            expect(observedOldValueNodeB1Events).toEqual([graphRootState.a1.b1]);
+            expect(observedOldValueNodeA2Events.length).toBe(0);
+            expect(observedOldValueNodeB2Events.length).toBe(0);
+
+            expect(orderedNotifications).toEqual([
+                observedRootEvents,
+                observedNodeA1Events,
+                observedNodeB1Events,
+            ]);
+        });
+    });
+
+    describe('observeChanges', () => {
+        it('emits undefined as previous value on store creation', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            expect(observedOldValueRootEvents).toEqual([undefined]);
+            expect(observedOldValueNodeA1Events).toEqual([undefined]);
+            expect(observedOldValueNodeA2Events).toEqual([undefined]);
+            expect(observedOldValueNodeB1Events).toEqual([undefined]);
+            expect(observedOldValueNodeB2Events).toEqual([undefined]);
         });
     });
 
@@ -220,6 +352,7 @@ describe('TrieStore', () => {
         });
 
         it('default compareFn uses referential equality', () => {
+            subscribeObservers();
             const state0 = store.state;
             expect(observedRootEvents.length).toBe(1);
             expect(observedRootEvents).toEqual([{}]);
@@ -243,6 +376,7 @@ describe('TrieStore', () => {
         });
 
         it('supports non default compareFn', () => {
+            subscribeObservers();
             const state0 = store.state;
 
             store.set(['a'], 1, () => true);
@@ -262,6 +396,7 @@ describe('TrieStore', () => {
         });
 
         it('non default compareFn does affect referential equality', () => {
+            subscribeObservers();
             store.set(['a'], 1);
             expect(observedRootEvents.length).toBe(2);
             expect(observedRootEvents).toEqual([{}, {a: 1}]);
@@ -370,6 +505,7 @@ describe('TrieStore', () => {
         });
 
         it('does not emit on no-op', () => {
+            subscribeObservers();
             store.set(['a'], {});
             store.set(['a', 'b'], {});
             const eventCountBefore = observedRootEvents.length;
@@ -378,6 +514,7 @@ describe('TrieStore', () => {
         });
 
         it('emits when deleted', () => {
+            subscribeObservers();
             store.set([], graphRootState);
             const rootEventCountOnStart = observedRootEvents.length;
             const a1EventCountOnStart = observedNodeA1Events.length;
@@ -403,6 +540,7 @@ describe('TrieStore', () => {
 
     describe('runInBatch', () => {
         it('emits once after batch ends', () => {
+            subscribeObservers();
             expect(observedRootEvents.length).toBe(1);
             store.runInBatch(() => {
                 store.set(['a'], 1);
@@ -418,6 +556,7 @@ describe('TrieStore', () => {
         });
 
         it('handles different paths', () => {
+            subscribeObservers();
             expect(observedRootEvents.length).toBe(1);
             expect(observedNodeA1Events.length).toBe(1);
             expect(observedNodeA2Events.length).toBe(1);
