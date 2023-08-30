@@ -244,6 +244,19 @@ describe('TrieStore', () => {
             expect(observedOldValueNodeB1Events).toEqual([undefined]);
             expect(observedOldValueNodeB2Events).toEqual([undefined]);
         });
+
+        it('emits previous value when it is changed', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            clearObservations();
+            store.set(['a1', 'b1'], 3);
+            expect(observedOldValueRootEvents).toEqual([{a1: {b1: 1}, a2: {b2: 2}}]);
+            expect(observedOldValueNodeA1Events).toEqual([{b1: 1}]);
+            expect(observedOldValueNodeA2Events).toEqual([]);
+            expect(observedOldValueNodeB1Events).toEqual([1]);
+            expect(observedOldValueNodeB2Events).toEqual([]);
+            expect(observedNodeB1Events).toEqual([3]);
+        });
     });
 
     describe('set', () => {
@@ -538,6 +551,29 @@ describe('TrieStore', () => {
         });
     });
 
+    describe('reset', () => {
+        it('does not emit any events ', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            clearObservations();
+            const newState = {a1: {b1: 3}, a2: {b2: 4}};
+            store.reset(newState);
+            expect(store.state).toBe(newState);
+
+            expect(observedRootEvents.length).toBe(0);
+            expect(observedNodeA1Events.length).toBe(0);
+            expect(observedNodeB1Events.length).toBe(0);
+            expect(observedNodeA2Events.length).toBe(0);
+            expect(observedNodeB2Events.length).toBe(0);
+
+            store.set(['a1'], 5);
+            expect(store.state).toEqual({a1: 5, a2: {b2: 4}});
+            expect(observedRootEvents.length).toBe(0);
+            expect(observedNodeA1Events.length).toBe(0);
+            expect(observedNodeB1Events.length).toBe(0);
+        });
+
+    });
     describe('runInBatch', () => {
         it('emits once after batch ends', () => {
             subscribeObservers();
