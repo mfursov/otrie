@@ -64,7 +64,7 @@ export function setInPath(state: StateRecord, path: ReadonlyArray<string>, newVa
     for (let i = 0; i < path.length - 1 && subState !== undefined; i++) {
         const key = path[i];
         assertTruthy(!Array.isArray(subState) || isValidArrayIndex(key),
-            () => `Invalid array index Path: '${path.slice(0, i + 1)}', index: '${key}'`);
+            () => `Invalid array index. Path: '${path.slice(0, i + 1)}', index: '${key}'`);
         subState = subState[key] as StateRecord | undefined;
         assertTruthy(subState === undefined || (typeof subState === 'object' && subState !== null),
             () => `Cannot set a property to a non-record parent. Path: '${path.slice(0, i + 1)}', type: '${subState === null ? '<null>' : typeof subState}'`);

@@ -92,11 +92,35 @@ describe('TrieStore', () => {
 
         it('store can be created with a custom state and the store emits it', async () => {
             const initialState = {a: 1};
-            const newStore = new TrieStore(initialState);
-            const observer = newStore.observe([]);
-            expect(newStore.state).toBe(initialState);
-            expect(newStore.state).toEqual({a: 1});
-            expect(await firstValueFrom(observer)).toBe(newStore.state);
+            const store = new TrieStore(initialState);
+            const observer = store.observe([]);
+            expect(store.state).toBe(initialState);
+            expect(store.state).toEqual({a: 1});
+            expect(await firstValueFrom(observer)).toBe(store.state);
+        });
+
+        it('runs a docs example with no issues', async () => {
+            const initialState = {
+                users: {
+                    user1: {wants: 'apple'},
+                    user2: {wants: 'orange'},
+                }
+            };
+            const store = new TrieStore(initialState);
+            const userLevelObserver = store.observe(['users']);
+            const user1LevelObserver = store.observe(['users', 'user1']);
+            const user1WantsLevelObserver = store.observe(['users', 'user1', 'wants']);
+
+            // When the store is constructed first, it emits an initial state to all observers.
+            expect(await firstValueFrom(userLevelObserver)).toEqual({user1: {wants: 'apple'}, user2: {wants: 'orange'}});
+            expect(await firstValueFrom(user1LevelObserver)).toEqual({wants: 'apple'});
+            expect(await firstValueFrom(user1WantsLevelObserver)).toBe('apple');
+
+            // When a trie node value is changed all parent node observers are notified.
+            store.set(['users', 'user1', 'wants'], 'carrot');
+            expect(await firstValueFrom(userLevelObserver)).toEqual({user1: {wants: 'carrot'}, user2: {wants: 'orange'}});
+            expect(await firstValueFrom(user1LevelObserver)).toEqual({wants: 'carrot'});
+            expect(await firstValueFrom(user1WantsLevelObserver)).toBe('carrot');
         });
     });
 
@@ -364,6 +388,23 @@ describe('TrieStore', () => {
             expect(store.state).toEqual({a: {b1: {c1: 1}, b2: {c2: 2}}});
         });
 
+        it('does not allow to set child nodes of primitive values', () => {
+            store.set(['a'], 1);
+            expect(() => store.set(['a', 'b'], 1)).toThrow('non-record parent');
+
+            store.set(['a'], BigInt(1));
+            expect(() => store.set(['a', 'b'], 1)).toThrow('non-record parent');
+
+            store.set(['a'], true);
+            expect(() => store.set(['a', 'b'], 1)).toThrow('non-record parent');
+
+            store.set(['a'], 'text');
+            expect(() => store.set(['a', 'b'], 1)).toThrow('non-record parent');
+
+            store.set(['a'], []);
+            expect(() => store.set(['a', 'b'], 1)).toThrow('Invalid array index');
+        });
+
         it('default compareFn uses referential equality', () => {
             subscribeObservers();
             const state0 = store.state;
@@ -577,36 +618,63 @@ describe('TrieStore', () => {
     describe('runInBatch', () => {
         it('emits once after batch ends', () => {
             subscribeObservers();
-            expect(observedRootEvents.length).toBe(1);
+            clearObservations();
+            expect(observedRootEvents.length).toBe(0);
             store.runInBatch(() => {
                 store.set(['a'], 1);
                 expect(store.get(['a'])).toBe(1);
-                expect(observedRootEvents.length).toBe(1); // Not emitted.
+                expect(observedRootEvents.length).toBe(0); // Not emitted.
                 store.set(['a'], 2);
-                expect(observedRootEvents.length).toBe(1); // Not emitted.
+                expect(observedRootEvents.length).toBe(0); // Not emitted.
                 store.set(['b'], 3);
-                expect(observedRootEvents.length).toBe(1); // Not emitted.
+                expect(observedRootEvents.length).toBe(0); // Not emitted.
             });
-            expect(observedRootEvents.length).toBe(2);
-            expect(observedRootEvents).toEqual([{}, {a: 2, b: 3}]);
+            expect(observedRootEvents.length).toBe(1);
+            expect(observedRootEvents).toEqual([{a: 2, b: 3}]);
         });
 
         it('handles different paths', () => {
             subscribeObservers();
-            expect(observedRootEvents.length).toBe(1);
-            expect(observedNodeA1Events.length).toBe(1);
-            expect(observedNodeA2Events.length).toBe(1);
+            clearObservations();
             store.runInBatch(() => {
                 store.set(['a1'], 1);
                 store.set(['a2'], 2);
             });
-            expect(observedRootEvents.length).toBe(2);
-            expect(observedNodeA1Events.length).toBe(2);
-            expect(observedNodeA2Events.length).toBe(2);
+            expect(observedRootEvents.length).toBe(1);
+            expect(observedNodeA1Events.length).toBe(1);
+            expect(observedNodeA2Events.length).toBe(1);
 
-            expect(observedRootEvents).toEqual([{}, {a1: 1, a2: 2}]);
-            expect(observedNodeA1Events).toEqual([undefined, 1]);
-            expect(observedNodeA2Events).toEqual([undefined, 2]);
+            expect(observedRootEvents).toEqual([{a1: 1, a2: 2}]);
+            expect(observedNodeA1Events).toEqual([1]);
+            expect(observedNodeA2Events).toEqual([2]);
+        });
+
+        it('nested batch is merged into the parent batch', () => {
+            store = new TrieStore(graphRootState);
+            subscribeObservers();
+            clearObservations();
+            store.runInBatch(() => {
+                store.set(['a1'], {});
+                store.set(['a2'], {});
+                store.runInBatch(() => {
+                    store.set(['a1', 'b1'], 3);
+                    store.set(['a2', 'b3'], 4);
+                });
+            });
+            expect(observedRootEvents.length).toBe(1);
+            expect(observedNodeA1Events.length).toBe(1);
+            expect(observedNodeA2Events.length).toBe(1);
+            expect(observedNodeB1Events.length).toBe(1);
+            expect(observedNodeB2Events.length).toBe(0);
+
+            expect(observedRootEvents).toEqual([{a1: {b1: 3}, a2: {b3: 4}}]);
+            expect(observedNodeA1Events).toEqual([{b1: 3}]);
+            expect(observedNodeA2Events).toEqual([{b3: 4}]);
+            expect(observedNodeB2Events.length).toBe(0);
+
+            expect(observedOldValueRootEvents).toEqual([graphRootState]);
+            expect(observedOldValueNodeA1Events).toEqual([graphRootState.a1]);
+            expect(observedOldValueNodeA2Events).toEqual([graphRootState.a2]);
         });
     });
 });

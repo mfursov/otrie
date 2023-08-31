@@ -1,6 +1,6 @@
 module.exports = {
     preset: 'ts-jest',
-    roots: ['<rootDir>/tests', '<rootDir>/local/tests'],
+    roots: ['<rootDir>/tests'],
     reporters: ['default'],
     testMatch: ['**/tests/**/*.jest.ts'],
     transform: {
