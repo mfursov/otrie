@@ -1,9 +1,18 @@
 import {describe, expect, it} from '@jest/globals';
-import {apply, deepCloneOnPath, deleteInPath, setInPath} from '../src/Utils';
+import {
+    apply,
+    deepCloneOnPath,
+    deleteInPath,
+    extractPaths,
+    isPathPrefix,
+    selectUniquePathPrefixes,
+    selectUniquePaths,
+    setInPath,
+    sortPaths
+} from '../src/Utils';
 
 describe('Utils', () => {
     describe('deepCloneOnPath', () => {
-
         describe('patchValue is undefined', () => {
             it('deletes a property', () => {
                 const originalState = {a: 1, b: 2};
@@ -269,15 +278,15 @@ describe('Utils', () => {
             expect(() => deleteInPath({a: ''}, ['a', 'b'])).toThrow('non-record parent');
         });
 
-        it(`delete a child from a string field in array causes an error`, () => {
+        it(`deletes a child from a string field in array causes an error`, () => {
             expect(() => deleteInPath({a: [{}, 'non-object-field']}, ['a', '1', 'b'])).toThrow('non-record parent');
         });
 
-        it(`delete a child from null field in array cases an error`, () => {
+        it(`deletes a child from null field in array cases an error`, () => {
             expect(() => deleteInPath({a: [{}, null]}, ['a', '1', 'b'])).toThrow('non-record parent');
         });
 
-        it(`delete a child from an array field in array does not cause an error (array is an object)`, () => {
+        it(`deletes a child from an array field in array does not cause an error (array is an object)`, () => {
             const state = {a: [{}, []]};
             const newState = deleteInPath(state, ['a', '1', 'b']);
             expect(newState).toBe(state);
@@ -376,6 +385,98 @@ describe('Utils', () => {
                 expect(newState).toEqual({a: 1, b: 3, d: 5});
                 expect(state).toEqual({a: 1, b: 2});
             });
+        });
+    });
+
+    describe("extractPaths", () => {
+        it('works with non-batch actions', () => {
+            expect(extractPaths({type: 'set', path: ['a'], value: 1}, 'as-is')).toEqual([['a']]);
+            expect(extractPaths({type: 'delete', path: ['a']}, 'as-is')).toEqual([['a']]);
+        });
+
+        it('works with batch actions, non sorted mode', () => {
+            expect(extractPaths({
+                    type: 'batch', actions: [
+                        {type: 'set', path: ['a'], value: 1},
+                        {type: 'delete', path: ['b']},
+                        {type: 'batch', actions: [{type: 'delete', path: ['a']}]},
+                    ]
+                }, 'as-is',
+            )).toEqual([['a'], ['b'], ['a']]);
+        });
+
+        it('works with batch actions, sorted mode', () => {
+            expect(extractPaths({
+                    type: 'batch', actions: [
+                        {type: 'set', path: ['c'], value: 1},
+                        {type: 'delete', path: ['b']},
+                        {type: 'batch', actions: [{type: 'delete', path: ['c']}]},
+                    ]
+                }, 'unique-and-sorted',
+            )).toEqual([['b'], ['c']]);
+        });
+    });
+
+    describe("isPathPrefix", () => {
+        it('returns expected results', () => {
+            expect(isPathPrefix([], [])).toBe(true);
+            expect(isPathPrefix(['a'], [])).toBe(true);
+            expect(isPathPrefix(['a'], ['a'])).toBe(true);
+            expect(isPathPrefix(['a', 'b'], ['a'])).toBe(true);
+            expect(isPathPrefix(['a'], ['a', 'b'])).toBe(false);
+            expect(isPathPrefix(['a'], ['b'])).toBe(false);
+        });
+    });
+
+    describe("sortPaths", () => {
+        it('sorts by strings first', () => {
+            const unsortedPaths = [['a', 'b', 'c'], ['a', 'a', 'd', 'e']];
+            expect(sortPaths(unsortedPaths)).toStrictEqual([['a', 'a', 'd', 'e'], ['a', 'b', 'c']]);
+            expect(unsortedPaths).toStrictEqual([['a', 'b', 'c'], ['a', 'a', 'd', 'e']]); // Not changed.
+        });
+
+        it('sorts by length next', () => {
+            const unsortedPaths = [['a', 'b', 'c'], ['a', 'b']];
+            expect(sortPaths(unsortedPaths)).toStrictEqual([['a', 'b'], ['a', 'b', 'c']]);
+            expect(unsortedPaths).toStrictEqual([['a', 'b', 'c'], ['a', 'b']]); // Not changed.
+        });
+
+        it('does not reorder equal values', () => {
+            const v1 = ['a', 'b'];
+            const v2 = ['a', 'b'];
+            const unsortedPaths = [v1, v2];
+            const sortedPaths = sortPaths(unsortedPaths);
+            expect(sortedPaths.length).toBe(2);
+            expect(sortedPaths[0]).toBe(v1);
+            expect(sortedPaths[1]).toBe(v2);
+        });
+    });
+
+    describe("selectUniquePathPrefixes", () => {
+        it('returns only prefixes', () => {
+            const v1 = ['a', 'b'];
+            const v2 = ['a', 'b', 'c'];
+            const v3 = ['d'];
+            const inputPaths = [v1, v2, v3];
+            const uniquePathPrefixes = selectUniquePathPrefixes([v1, v2, v3]);
+            expect(uniquePathPrefixes.length).toBe(2);
+            expect(uniquePathPrefixes[0]).toBe(v1);
+            expect(uniquePathPrefixes[1]).toBe(v3);
+            expect(inputPaths).toStrictEqual([v1, v2, v3]); // Not changed.
+        });
+    });
+
+    describe("selectUniquePaths", () => {
+        it('keeps only unique paths', () => {
+            const v1 = ['a', 'b'];
+            const v2 = ['a', 'b'];
+            const v3 = ['a'];
+            const nonUniquePaths = [v1, v2, v3];
+            const uniquePaths = selectUniquePaths(nonUniquePaths);
+            expect(uniquePaths.length).toBe(2);
+            expect(uniquePaths[0]).toBe(v3);
+            expect(uniquePaths[1]).toBe(v1);
+            expect(nonUniquePaths).toStrictEqual([v1, v2, v3]); // Not changed.
         });
     });
 });
