@@ -247,7 +247,8 @@ export class TrieStore<RootStateType extends StateRecord = StateRecord> {
     private selectChildPathsWithObservers(parentPaths: Array<string[]>): Array<string[]> {
         const childPaths: Array<string[]> = [];
         for (const path of parentPaths) {
-            if ((this.observersTrie.getNode(path)?.childrenWithValue || 0) > 0) {
+            const childrenWithObserver = this.observersTrie.count(path, 'children-only');
+            if (childrenWithObserver > 0) {
                 this.observersTrie.visitDfs('pre-order', (trieSubject, childPath) => {
                     if (trieSubject) {
                         childPaths.push([...childPath]);
