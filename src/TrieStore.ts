@@ -63,6 +63,10 @@ export class TrieStore<RootStateType extends StateRecord = StateRecord> {
         return this.rootState;
     }
 
+    get state$(): Observable<RootStateType> {
+        return this.observe([]);
+    }
+
     /**
      * Returns a state value stored in the path.
      * If there is no value associated with the path returns `undefined`.

@@ -191,6 +191,18 @@ describe('TrieStore', () => {
         });
     });
 
+    describe('state$', () => {
+        it('same as root observable', async () => {
+            const rootState1 = {};
+            const store = new TrieStore(rootState1);
+            expect(await firstValueFrom(store.state$)).toBe(rootState1);
+
+            const rootState2 = {a: 1};
+            store.reset(rootState2);
+            expect(await firstValueFrom(store.state$)).toBe(rootState2);
+        });
+    });
+
     describe('get', () => {
         it('returns top-level state for an empty path', () => {
             expect(store.get([])).toBe(store.state);
