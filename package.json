@@ -1,29 +1,37 @@
 {
   "name": "otrie",
   "description": "Observable Path Trie Store",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "license": "Apache-2.0",
-  "main": "dist/index.js",
+  "main": "dist/index.cjs.js",
+  "module": "dist/index.esm.js",
   "private": false,
   "scripts": {
-    "build": "tsc",
+    "prebuild": "npm run clean",
+    "build": "webpack",
     "clean": "rimraf ./dist",
     "lint": "eslint . --ext .ts",
     "test": "jest --runInBand",
-    "release": "npm run clean && npm run build && npm run lint && npm run test && rimraf ./dist/tests && npm publish"
+    "format": "prettier --write \"./**/*.{ts,js}\"",
+    "release": "npm run build && npm run lint && npm run test && npm publish"
   },
   "dependencies": {
-    "assertic": "^1.0.0",
-    "ptrie": "^1.0.1",
+    "assertic": "^1.3.0",
+    "ptrie": "^1.2.0",
     "rxjs": "^7.5.7"
   },
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^6.13.1",
-    "@typescript-eslint/parser": "^6.13.1",
-    "eslint": "^8.54.0",
-    "rimraf": "^5.0.5",
-    "ts-jest": "^29.1.1",
-    "typescript": "^5.3.2"
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "eslint": "^9.25.1",
+    "eslint-plugin-unused-imports": "^4.1.4",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "ts-jest": "^29.3.2",
+    "ts-loader": "^9.5.2",
+    "typescript": "^5.8.3",
+    "webpack": "^5.99.7",
+    "webpack-cli": "^5.1.4"
   },
   "engines": {
     "node": ">=10"
