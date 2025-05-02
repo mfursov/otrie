@@ -4,6 +4,8 @@ const sharedResolve = {
   extensions: ['.ts', '.js', '.json'],
 };
 
+const externals = ['rxjs'];
+
 // Shared TypeScript rule.
 const tsRule = {
   test: /\.ts$/,
@@ -37,8 +39,9 @@ module.exports = [
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: 'index.cjs.js',
-      library: { type: 'commonjs2' },
+      library: {type: 'commonjs2'},
     },
+    externals,
     resolve: {
       ...sharedResolve,
     },
@@ -57,11 +60,12 @@ module.exports = [
     output: {
       path: path.resolve(__dirname, 'dist'),
       filename: 'index.esm.js',
-      library: { type: 'module' },
+      library: {type: 'module'},
     },
     experiments: {
       outputModule: true,
     },
+    externals,
     resolve: {
       ...sharedResolve,
     },
