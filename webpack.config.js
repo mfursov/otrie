@@ -4,7 +4,7 @@ const sharedResolve = {
   extensions: ['.ts', '.js', '.json'],
 };
 
-const externals = ['rxjs'];
+const externals = ['rxjs', 'rxjs/operators'];
 
 // Shared TypeScript rule.
 const tsRule = {
